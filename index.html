@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bem-vindo à sua Sala Personalizada</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; background: white; border-radius: 20px; padding: 30px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+        .casa-nome { font-size: 28px; color: #1a73e8; margin-bottom: 20px; text-align: center; }
+        .mensagens { margin: 30px 0; }
+        .mensagem-card { background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 15px; border-left: 4px solid #1a73e8; }
+        .fotos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 15px; margin: 30px 0; }
+        .foto { width: 100%; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .chat-section { margin-top: 40px; border-top: 2px solid #e0e0e0; padding-top: 20px; }
+        .chat-messages { background: #f8f9fa; border-radius: 12px; height: 300px; overflow-y: auto; padding: 15px; margin-bottom: 15px; }
+        .message { margin-bottom: 10px; padding: 8px 12px; border-radius: 8px; max-width: 80%; }
+        .message.admin { background: #1a73e8; color: white; margin-left: auto; text-align: right; }
+        .message.user { background: #e9ecef; color: #333; margin-right: auto; }
+        .message small { font-size: 11px; opacity: 0.8; display: block; }
+        .chat-input-area { display: flex; gap: 10px; }
+        .chat-input-area input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; }
+        .chat-input-area button { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+        .loading { text-align: center; font-size: 18px; color: white; margin-top: 50px; }
+        .error { text-align: center; font-size: 18px; color: white; background: rgba(255,0,0,0.8); padding: 20px; border-radius: 12px; }
+    </style>
+</head>
+<body>
+<div id="loading" class="loading">Carregando sua experiência personalizada...</div>
+<div id="content" style="display: none;"></div>
+
+<script>
+    const firebaseConfig = {
+        databaseURL: "https://dados-c9c96-default-rtdb.firebaseio.com/"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    
+    const urlParams = new URLSearchParams(window.location.search);
+    const casaId = urlParams.get('id');
+    
+    if(!casaId) {
+        document.getElementById('loading').innerHTML = '<div class="error">❌ QR Code inválido! Contate o administrador.</div>';
+    } else {
+        carregarCasa(casaId);
+    }
+    
+    function carregarCasa(id) {
+        db.ref(`casas/${id}`).once('value', (snapshot) => {
+            const casa = snapshot.val();
+            if(!casa) {
+                document.getElementById('loading').innerHTML = '<div class="error">❌ Casa não encontrada!</div>';
+                return;
+            }
+            
+            document.getElementById('loading').style.display = 'none';
+            const container = document.getElementById('content');
+            container.style.display = 'block';
+            
+            // Construir HTML
+            let html = `
+                <div class="container">
+                    <div class="casa-nome">🏠 ${casa.nome}</div>
+                    <div class="mensagens">
+                        <h3>📝 Mensagens para você:</h3>
+            `;
+            
+            if(casa.mensagens && casa.mensagens.length > 0) {
+                casa.mensagens.forEach(msg => {
+                    html += `<div class="mensagem-card">💬 ${msg}</div>`;
+                });
+            } else {
+                html += `<p>Nenhuma mensagem cadastrada.</p>`;
+            }
+            
+            html += `</div><div class="fotos"><h3>📸 Fotos:</h3>`;
+            
+            if(casa.fotos && casa.fotos.length > 0) {
+                casa.fotos.forEach(fotoBase64 => {
+                    html += `<img src="${fotoBase64}" class="foto" alt="Foto da casa">`;
+                });
+            } else {
+                html += `<p>Nenhuma foto cadastrada.</p>`;
+            }
+            
+            html += `
+                    </div>
+                    <div class="chat-section">
+                        <h3>💬 Chat com o Administrador</h3>
+                        <div id="chatMessages" class="chat-messages"></div>
+                        <div class="chat-input-area">
+                            <input type="text" id="chatInput" placeholder="Digite sua mensagem...">
+                            <button onclick="enviarMensagemUsuario()">Enviar</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            iniciarChat(id);
+        });
+    }
+    
+    function iniciarChat(casaId) {
+        const messagesDiv = document.getElementById('chatMessages');
+        
+        db.ref(`chats/${casaId}/mensagens`).orderByChild('timestamp').on('value', (snapshot) => {
+            const msgs = snapshot.val();
+            messagesDiv.innerHTML = '';
+            if(msgs) {
+                const msgsArray = Object.values(msgs);
+                msgsArray.forEach(msg => {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = `message ${msg.de === 'admin' ? 'admin' : 'user'}`;
+                    msgDiv.innerHTML = `
+                        <strong>${msg.de === 'admin' ? 'Administrador' : 'Você'}</strong><br>
+                        ${msg.texto}<br>
+                        <small>${new Date(msg.timestamp).toLocaleTimeString()}</small>
+                    `;
+                    messagesDiv.appendChild(msgDiv);
+                });
+                messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            }
+        });
+        
+        window.enviarMensagemUsuario = function() {
+            const input = document.getElementById('chatInput');
+            const texto = input.value.trim();
+            if(!texto) return;
+            
+            db.ref(`chats/${casaId}/mensagens`).push({
+                de: 'user',
+                texto: texto,
+                timestamp: Date.now()
+            });
+            input.value = '';
+        };
+    }
+</script>
+</body>
+</html>
