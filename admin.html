@@ -256,9 +256,14 @@
             opacity: 0.85;
         }
 
-        .sala-card.ocupada {
+        .sala-card.configurada {
             border: 2px solid #34c759;
             background: #0a1a0a;
+        }
+
+        .sala-card.vazia {
+            border: 2px solid #555;
+            background: #1a1a1a;
         }
 
         .badge-fechada {
@@ -270,7 +275,7 @@
             margin-left: 0.5rem;
         }
 
-        .badge-ocupada {
+        .badge-configurada {
             background: #34c759;
             color: white;
             padding: 0.125rem 0.5rem;
@@ -583,7 +588,6 @@
             color: #ff3333;
         }
 
-        /* Formulário de criação de sala vazia */
         .form-group {
             margin-bottom: 1rem;
         }
@@ -670,7 +674,7 @@
         <div class="card">
             <div class="card-header">
                 <h2>📋 Salas Criadas</h2>
-                <p>🟢 Verde = Ocupada | 🟡 Amarelo = Cliente clicou em PAGAR | 🔴 Vermelho = Fechada | ⚪ Cinza = Vazia</p>
+                <p>🟢 Verde = Configurada | 🟡 Amarelo = Cliente clicou em PAGAR | 🔴 Vermelho = Fechada | ⚪ Cinza = Vazia (aguardando configuração)</p>
             </div>
             <div class="card-body">
                 <button class="btn btn-secondary btn-sm" onclick="carregarSalas()" style="margin-bottom: 1rem;">🔄 Atualizar Salas</button>
@@ -822,7 +826,7 @@
                 criadoPor: 'admin',
                 dataCriacao: Date.now(),
                 status: 'ativa',
-                ocupada: false
+                configurada: false
             });
             
             mostrarToast(`✅ Sala "${nome}" criada com sucesso! QR Code gerado.`);
@@ -830,7 +834,6 @@
             document.getElementById('tempoHorasVazia').value = '48';
             carregarSalas();
             
-            // Mudar para aba de salas para mostrar a nova sala
             document.querySelector('.tab-btn[data-tab="salas"]').click();
             
         } catch (error) {
@@ -1058,7 +1061,7 @@
     };
 
     window.fecharSala = async function(salaId, salaNome) {
-        if (confirm(`Confirmar PAGAMENTO da sala "${salaNome}"?`)) {
+        if (confirm(`Confirmar PAGAMENTO da sala "${salaNome}"? Ao fechar, o cliente verá mensagem de encerramento.`)) {
             await db.ref(`casas/${salaId}`).update({
                 status: 'fechada',
                 dataFechamento: Date.now(),
@@ -1080,12 +1083,27 @@
     };
 
     window.reabrirSala = async function(salaId, salaNome) {
-        if (confirm(`Reabrir sala "${salaNome}"?`)) {
+        if (confirm(`Reabrir sala "${salaNome}"? O cliente poderá acessar novamente.`)) {
             await db.ref(`casas/${salaId}`).update({
                 status: 'ativa',
                 pago: false
             });
             mostrarToast(`🟢 Sala "${salaNome}" reaberta!`);
+            carregarSalas();
+        }
+    };
+
+    // FUNÇÃO PARA REABRIR PARA CONFIGURAÇÃO (LIMPAR DADOS)
+    window.reabrirParaConfiguracao = async function(salaId, salaNome) {
+        if (confirm(`REABRIR "${salaNome}" para configuração?\n\nA sala ficará vazia novamente e poderá ser reconfigurada pelo mobile.`)) {
+            await db.ref(`casas/${salaId}`).update({
+                mensagens: [],
+                fotos: [],
+                configurada: false,
+                status: 'ativa',
+                dataReabertura: Date.now()
+            });
+            mostrarToast(`✅ Sala "${salaNome}" reaberta para configuração!`);
             carregarSalas();
         }
     };
@@ -1101,10 +1119,10 @@
         let html = '<table class="visitantes-table">';
         html += '<tr><th>Data do Fechamento</th><th>Sala</th><th>Status</th></tr>';
         pagamentosConfirmados.forEach(p => {
-            html += `<td>
+            html += `<tr>
                 <td>${p.data}</td>
-                <td>💰 ${escapeHtml(p.salaNome)}</td>
-                <td><span style="color:#ff9500;">Pagamento Confirmado</span></td>
+                <td>💰 ${escapeHtml(p.salaNome)}<\/td>
+                <td><span style="color:#ff9500;">Pagamento Confirmado</span><\/td>
             </tr>`;
         });
         html += '</table>';
@@ -1194,18 +1212,18 @@
             const horasRest = Math.max(0, Math.floor((expiraEm - Date.now()) / 3600000));
             const isFechada = casa.status === 'fechada';
             const temCliquePermanente = cliquesPermanentes[id] === true;
-            const isOcupada = (casa.mensagens && casa.mensagens.length > 0) || (casa.fotos && casa.fotos.length > 0);
-            const criadoPor = casa.criadoPor || 'admin';
-
+            const isConfigurada = (casa.mensagens && casa.mensagens.length > 0) || (casa.fotos && casa.fotos.length > 0);
+            
             let statusClass = '';
             let statusBadge = '';
             if (isFechada) {
                 statusClass = 'fechada';
                 statusBadge = '<span class="badge-fechada">🔒 Fechada</span>';
-            } else if (isOcupada) {
-                statusClass = 'ocupada';
-                statusBadge = '<span class="badge-ocupada">✅ Ocupada</span>';
+            } else if (isConfigurada) {
+                statusClass = 'configurada';
+                statusBadge = '<span class="badge-configurada">✅ Configurada</span>';
             } else {
+                statusClass = 'vazia';
                 statusBadge = '<span class="badge-vazia">⚪ Vazia</span>';
             }
 
@@ -1266,7 +1284,7 @@
                 <div class="sala-info">
                     <span class="tempo-span">⏱️ ${horasRest} horas restantes</span>
                     <span>📸 ${casa.fotos?.length || 0} fotos</span>
-                    <span>${criadoPor === 'admin' ? '👑 Criada pelo Admin' : '📱 Criada pelo Mobile'}</span>
+                    <span>${casa.criadoPor === 'admin' ? '👑 Criada pelo Admin' : '📱 Criada pelo Mobile'}</span>
                 </div>
                 ${popupHtml}
                 <div class="qr-mini" id="qr-${id}"></div>
@@ -1276,6 +1294,7 @@
                     <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); abrirChat('${id}', '${escapeHtml(casa.nome)}')">💬 Chat</button>
                     <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); alterarTempo('${id}', '${escapeHtml(casa.nome)}')">⏱️ Alterar Tempo</button>
                     ${!isFechada ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); fecharSala('${id}', '${escapeHtml(casa.nome)}')">💰 Pagamento e Fechar</button>` : `<button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); reabrirSala('${id}', '${escapeHtml(casa.nome)}')">🔓 Reabrir</button>`}
+                    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); reabrirParaConfiguracao('${id}', '${escapeHtml(casa.nome)}')">🔄 Reabrir Config</button>
                 </div>
             `;
             container.appendChild(div);
@@ -1395,10 +1414,10 @@
             if (!v.salaNome) continue;
             const online = (agora - v.ultimaAtividade) < 60000;
             html += `<tr>
-                <td>${escapeHtml(v.salaNome)}</td>
-                <td>${escapeHtml(v.idVisitante?.substring(0, 12) || 'Anônimo')}...</td>
-                <td><span class="${online ? 'badge-online' : 'badge-offline'}">${online ? 'Online' : 'Offline'}</span></td>
-                <td>${new Date(v.ultimaAtividade).toLocaleTimeString()}</td>
+                <td>${escapeHtml(v.salaNome)}<\/td>
+                <td>${escapeHtml(v.idVisitante?.substring(0, 12) || 'Anônimo')}...<\/td>
+                <td><span class="${online ? 'badge-online' : 'badge-offline'}">${online ? 'Online' : 'Offline'}</span><\/td>
+                <td>${new Date(v.ultimaAtividade).toLocaleTimeString()}<\/td>
             </tr>`;
         }
         html += '</table>';
@@ -1472,10 +1491,10 @@
         let html = '<table class="visitantes-table">';
         html += '<tr><th>Data</th><th>Sala</th><th>Ação</th></tr>';
         notificacoes.forEach(n => {
-            html += `<tr>
+            html += `<td>
                 <td>${n.data}</td>
-                <td>${escapeHtml(n.salaNome)}</td>
-                <td>${n.acao}</td>
+                <td>${escapeHtml(n.salaNome)}<\/td>
+                <td>${n.acao}<\/td>
             </tr>`;
         });
         html += '</table>';
