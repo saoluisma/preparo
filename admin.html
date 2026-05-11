@@ -924,7 +924,7 @@
             if (!casa) throw new Error('Sala não encontrada');
             const zip = new JSZip();
             const nomeBase = salaNome.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            const urlSite = `${window.location.origin}${window.location.pathname.replace('admin.html', 'index.html')}?id=${salaId}`;
+            const urlSite = `${window.location.origin}${window.location.pathname.replace('admin.html', 'redirect.html')}?id=${salaId}`;
             const tempDiv = document.createElement('div');
             tempDiv.style.position = 'absolute';
             tempDiv.style.left = '-9999px';
@@ -1207,7 +1207,8 @@
         const cliquesPermanentes = JSON.parse(localStorage.getItem('cliques_pagamento_permanente') || '{}');
 
         for (let [id, casa] of salasArray) {
-            const urlSite = `${window.location.origin}${window.location.pathname.replace('admin.html', 'index.html')}?id=${id}`;
+            // URL usando redirect.html
+            const urlSite = `${window.location.origin}${window.location.pathname.replace('admin.html', 'redirect.html')}?id=${id}`;
             const expiraEm = casa.expiraEm || (Date.now() + 48 * 3600000);
             const horasRest = Math.max(0, Math.floor((expiraEm - Date.now()) / 3600000));
             const isFechada = casa.status === 'fechada';
@@ -1315,6 +1316,8 @@
         const canvas = await html2canvas(qrDiv, { scale: 3 });
         const link = document.createElement('a');
         link.download = `qr-${salaNome.replace(/[^a-z0-9]/gi, '_')}.png`;
+        // URL usando redirect.html
+        const urlSite = `${window.location.origin}${window.location.pathname.replace('admin.html', 'redirect.html')}?id=${salaId}`;
         link.href = canvas.toDataURL();
         link.click();
     };
@@ -1491,7 +1494,7 @@
         let html = '<table class="visitantes-table">';
         html += '<tr><th>Data</th><th>Sala</th><th>Ação</th></tr>';
         notificacoes.forEach(n => {
-            html += `<td>
+            html += `<tr>
                 <td>${n.data}</td>
                 <td>${escapeHtml(n.salaNome)}<\/td>
                 <td>${n.acao}<\/td>
