@@ -78,7 +78,7 @@
                 window.location.href = 'index.html';
             }, 2000);
         } else {
-            verificarSalaE本人edirecionar(salaId);
+            verificarSalaERedirecionar(salaId);
         }
 
         async function verificarSalaERedirecionar(id) {
@@ -95,7 +95,6 @@
                     return;
                 }
 
-                // Verificar se a sala tem conteúdo configurado
                 const temConteudo = (sala.mensagens && sala.mensagens.length > 0) || (sala.fotos && sala.fotos.length > 0);
                 const estaFechada = sala.status === 'fechada';
 
