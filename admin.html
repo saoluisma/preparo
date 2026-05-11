@@ -842,6 +842,54 @@
         }
     }
 
+    // ==================== APAGAR SALA COMPLETAMENTE ====================
+    window.apagarSala = async function(salaId, salaNome) {
+        if (confirm(`⚠️ ATENÇÃO! ⚠️\n\nVocê tem certeza que deseja APAGAR PERMANENTEMENTE a sala "${salaNome}"?\n\nTodos os dados serão removidos:\n- QR Code\n- Fotos\n- Mensagens\n- Chat\n- Histórico de visitantes\n\nEsta ação NÃO pode ser desfeita!`)) {
+            try {
+                mostrarToast(`🗑️ Apagando sala "${salaNome}"...`);
+                
+                // Apagar dados da sala
+                await db.ref(`casas/${salaId}`).remove();
+                
+                // Apagar chat da sala se existir
+                await db.ref(`chats/${salaId}`).remove();
+                
+                // Apagar cliques de pagamento
+                await db.ref(`cliques_pagamento/${salaId}`).remove();
+                
+                // Apagar visitantes relacionados
+                const visitantesSnapshot = await db.ref('visitantes').once('value');
+                const visitantes = visitantesSnapshot.val();
+                if (visitantes) {
+                    for (let visitanteId in visitantes) {
+                        if (visitantes[visitanteId].salaId === salaId) {
+                            await db.ref(`visitantes/${visitanteId}`).remove();
+                        }
+                    }
+                }
+                
+                // Remover do localStorage o indicador de mensagem não lida
+                let mensagensNaoLidas = JSON.parse(localStorage.getItem('mensagens_nao_lidas') || '{}');
+                delete mensagensNaoLidas[salaId];
+                localStorage.setItem('mensagens_nao_lidas', JSON.stringify(mensagensNaoLidas));
+                
+                // Remover do localStorage o indicador de clique permanente
+                let cliquesPermanentes = JSON.parse(localStorage.getItem('cliques_pagamento_permanente') || '{}');
+                delete cliquesPermanentes[salaId];
+                localStorage.setItem('cliques_pagamento_permanente', JSON.stringify(cliquesPermanentes));
+                
+                mostrarToast(`✅ Sala "${salaNome}" foi apagada com sucesso!`);
+                
+                // Recarregar a lista de salas
+                carregarSalas();
+                
+            } catch (error) {
+                console.error('Erro ao apagar sala:', error);
+                mostrarToast(`❌ Erro ao apagar sala "${salaNome}"!`);
+            }
+        }
+    };
+
     // ==================== MENSAGENS ====================
     
     async function carregarMensagensDoFirebase() {
@@ -1093,21 +1141,6 @@
         }
     };
 
-    // FUNÇÃO PARA REABRIR PARA CONFIGURAÇÃO (LIMPAR DADOS)
-    window.reabrirParaConfiguracao = async function(salaId, salaNome) {
-        if (confirm(`REABRIR "${salaNome}" para configuração?\n\nA sala ficará vazia novamente e poderá ser reconfigurada pelo mobile.`)) {
-            await db.ref(`casas/${salaId}`).update({
-                mensagens: [],
-                fotos: [],
-                configurada: false,
-                status: 'ativa',
-                dataReabertura: Date.now()
-            });
-            mostrarToast(`✅ Sala "${salaNome}" reaberta para configuração!`);
-            carregarSalas();
-        }
-    };
-
     function carregarPagamentosConfirmados() {
         const saved = localStorage.getItem('pagamentos_confirmados');
         if (saved) pagamentosConfirmados = JSON.parse(saved);
@@ -1117,7 +1150,7 @@
             return;
         }
         let html = '<table class="visitantes-table">';
-        html += '<tr><th>Data do Fechamento</th><th>Sala</th><th>Status</th></tr>';
+        html += '<tr><th>Data do Fechamento</th><th>Sala</th><th>Status</th><tr>';
         pagamentosConfirmados.forEach(p => {
             html += `<tr>
                 <td>${p.data}</td>
@@ -1207,7 +1240,6 @@
         const cliquesPermanentes = JSON.parse(localStorage.getItem('cliques_pagamento_permanente') || '{}');
 
         for (let [id, casa] of salasArray) {
-            // URL usando redirect.html
             const urlSite = `${window.location.origin}${window.location.pathname.replace('admin.html', 'redirect.html')}?id=${id}`;
             const expiraEm = casa.expiraEm || (Date.now() + 48 * 3600000);
             const horasRest = Math.max(0, Math.floor((expiraEm - Date.now()) / 3600000));
@@ -1295,7 +1327,7 @@
                     <button class="btn btn-success btn-sm" onclick="event.stopPropagation(); abrirChat('${id}', '${escapeHtml(casa.nome)}')">💬 Chat</button>
                     <button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); alterarTempo('${id}', '${escapeHtml(casa.nome)}')">⏱️ Alterar Tempo</button>
                     ${!isFechada ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); fecharSala('${id}', '${escapeHtml(casa.nome)}')">💰 Pagamento e Fechar</button>` : `<button class="btn btn-warning btn-sm" onclick="event.stopPropagation(); reabrirSala('${id}', '${escapeHtml(casa.nome)}')">🔓 Reabrir</button>`}
-                    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); reabrirParaConfiguracao('${id}', '${escapeHtml(casa.nome)}')">🔄 Reabrir Config</button>
+                    <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); apagarSala('${id}', '${escapeHtml(casa.nome)}')">🗑️ Apagar Sala</button>
                 </div>
             `;
             container.appendChild(div);
@@ -1316,8 +1348,6 @@
         const canvas = await html2canvas(qrDiv, { scale: 3 });
         const link = document.createElement('a');
         link.download = `qr-${salaNome.replace(/[^a-z0-9]/gi, '_')}.png`;
-        // URL usando redirect.html
-        const urlSite = `${window.location.origin}${window.location.pathname.replace('admin.html', 'redirect.html')}?id=${salaId}`;
         link.href = canvas.toDataURL();
         link.click();
     };
@@ -1411,7 +1441,7 @@
         }
         const agora = Date.now();
         let html = '<table class="visitantes-table">';
-        html += '<tr><th>Sala</th><th>Visitante</th><th>Status</th><th>Atividade</th></tr>';
+        html += '<tr><th>Sala</th><th>Visitante</th><th>Status</th><th>Atividade</th></table>';
         for (let id in visitantes) {
             const v = visitantes[id];
             if (!v.salaNome) continue;
