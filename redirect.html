@@ -14,50 +14,27 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0a0a0a;
-            color: #e0e0e0;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
         }
 
-        .loader-container {
-            text-align: center;
-            padding: 2rem;
-        }
-
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 3px solid #2a2a2a;
-            border-top-color: #007aff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
-        }
-
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .message {
-            color: #888;
-            font-size: 0.875rem;
-            margin-top: 1rem;
-        }
-
-        .error {
-            color: #ff3b30;
+        /* Tela invisível - o usuário não vê nada */
+        .hidden-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0a;
+            z-index: 9999;
         }
     </style>
 </head>
 <body>
-    <div class="loader-container">
-        <div class="spinner"></div>
-        <div class="message" id="statusMessage">Verificando sala...</div>
-    </div>
+    <div class="hidden-container" id="loadingContainer"></div>
 
     <script>
         const firebaseConfig = {
@@ -69,14 +46,9 @@
         const urlParams = new URLSearchParams(window.location.search);
         const salaId = urlParams.get('id');
 
-        const statusDiv = document.getElementById('statusMessage');
-
         if (!salaId) {
-            statusDiv.innerHTML = '❌ ID da sala não encontrado';
-            statusDiv.classList.add('error');
-            setTimeout(() => {
-                window.location.href = 'index.html';
-            }, 2000);
+            // Sem ID, vai direto para o index
+            window.location.href = 'index.html';
         } else {
             verificarSalaERedirecionar(salaId);
         }
@@ -87,11 +59,7 @@
                 const sala = snapshot.val();
 
                 if (!sala) {
-                    statusDiv.innerHTML = '❌ Sala não encontrada';
-                    statusDiv.classList.add('error');
-                    setTimeout(() => {
-                        window.location.href = 'index.html';
-                    }, 2000);
+                    window.location.href = 'index.html';
                     return;
                 }
 
@@ -99,29 +67,16 @@
                 const estaFechada = sala.status === 'fechada';
 
                 if (estaFechada) {
-                    statusDiv.innerHTML = '🔒 Sala encerrada. Redirecionando...';
-                    setTimeout(() => {
-                        window.location.href = `index.html?id=${id}`;
-                    }, 1500);
+                    window.location.href = `index.html?id=${id}`;
                 } else if (temConteudo) {
-                    statusDiv.innerHTML = '✅ Sala configurada. Redirecionando para acesso...';
-                    setTimeout(() => {
-                        window.location.href = `index.html?id=${id}`;
-                    }, 1500);
+                    window.location.href = `index.html?id=${id}`;
                 } else {
-                    statusDiv.innerHTML = '⚙️ Sala vazia. Redirecionando para configuração...';
-                    setTimeout(() => {
-                        window.location.href = `mobile.html?id=${id}`;
-                    }, 1500);
+                    window.location.href = `mobile.html?id=${id}`;
                 }
 
             } catch (error) {
                 console.error('Erro:', error);
-                statusDiv.innerHTML = '❌ Erro ao verificar sala';
-                statusDiv.classList.add('error');
-                setTimeout(() => {
-                    window.location.href = 'index.html';
-                }, 2000);
+                window.location.href = 'index.html';
             }
         }
     </script>
